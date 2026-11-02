@@ -3,13 +3,27 @@ import crypto from 'node:crypto';
 /* Secrets that must never protect a real server: the demo default, the .env.example placeholder, and obvious words.
    Outside production a weak or missing JWT_SECRET is replaced by a random one for this run (see below), so a public default
    can never be used to forge a login on a server somebody forgot to configure. */
-const KNOWN_WEAK_SECRETS = ['development-only-change-me', 'change-this-to-a-long-random-secret', 'paste-the-output', 'secret', 'changeme', 'password'];
+const KNOWN_WEAK_SECRETS = [
+  'development-only-change-me',
+  'change-this-to-a-long-random-secret',
+  'paste-the-output',
+  'secret',
+  'changeme',
+  'password',
+];
 const providedSecret = (process.env.JWT_SECRET || '').trim();
-const secretIsWeak = providedSecret.length < 32 || KNOWN_WEAK_SECRETS.some((w) => providedSecret.toLowerCase().includes(w));
-const jwtSecret = secretIsWeak && process.env.NODE_ENV !== 'production' ? crypto.randomBytes(48).toString('hex') : providedSecret;
+const secretIsWeak =
+  providedSecret.length < 32 || KNOWN_WEAK_SECRETS.some((w) => providedSecret.toLowerCase().includes(w));
+const jwtSecret =
+  secretIsWeak && process.env.NODE_ENV !== 'production' ? crypto.randomBytes(48).toString('hex') : providedSecret;
 if (secretIsWeak && process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test')
-  console.warn('[security] JWT_SECRET is missing, too short or a placeholder: using a random secret for this run, so everyone is signed out whenever the API restarts. Run `npm run setup:env` (or `npm run gen:secret`) to set a permanent one.');
-const asInt = (value, fallback) => { const n = Number.parseInt(value, 10); return Number.isFinite(n) ? n : fallback; };
+  console.warn(
+    '[security] JWT_SECRET is missing, too short or a placeholder: using a random secret for this run, so everyone is signed out whenever the API restarts. Run `npm run setup:env` (or `npm run gen:secret`) to set a permanent one.',
+  );
+const asInt = (value, fallback) => {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
+};
 export const env = Object.freeze({
   nodeEnv: process.env.NODE_ENV || 'development',
   port: asInt(process.env.PORT, 4000),
@@ -18,16 +32,13 @@ export const env = Object.freeze({
   databaseUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/civicconnect',
   dbPoolMax: asInt(process.env.DB_POOL_MAX, 10),
   uploadDir: process.env.UPLOAD_DIR || './uploads',
-  appUrl: (process.env.APP_URL || (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',')[0]).trim().replace(/\/$/, ''),
+  appUrl: (process.env.APP_URL || (process.env.CORS_ORIGIN || 'http://localhost:5173').split(',')[0])
+    .trim()
+    .replace(/\/$/, ''),
   resetTokenMinutes: asInt(process.env.RESET_TOKEN_MINUTES, 30),
-  smtp: Object.freeze({
-    host: (process.env.SMTP_HOST || '').trim(),
-    port: asInt(process.env.SMTP_PORT, 587),
-    secure: String(process.env.SMTP_SECURE || '').toLowerCase() === 'true',
-    user: process.env.SMTP_USER || '',
-    // Google shows app passwords as four groups of four letters; spaces are not part of the password.
-    pass: (process.env.SMTP_PASS || '').replace(/\s+/g, ''),
-    from: process.env.MAIL_FROM || 'CivicConnect <no-reply@civicconnect.local>',
+  resend: Object.freeze({
+    apiKey: (process.env.RESEND_API_KEY || '').trim(),
+    from: process.env.MAIL_FROM || 'CivicConnect <onboarding@resend.dev>',
   }),
   maxUploadMb: asInt(process.env.MAX_UPLOAD_MB, 25),
   // Authority accounts can see citizens' contact details, so sign-up needs this code.
@@ -79,16 +90,22 @@ const isLocalAddress = (url) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|
 if (env.nodeEnv === 'production') {
   const problems = [];
   if (secretIsWeak)
-    problems.push('JWT_SECRET must be a random string of at least 32 characters, not a placeholder (run: npm run gen:secret).');
+    problems.push(
+      'JWT_SECRET must be a random string of at least 32 characters, not a placeholder (run: npm run gen:secret).',
+    );
   if (KNOWN_DEV_INVITE_CODES.includes(env.authorityInviteCode))
-    problems.push('AUTHORITY_INVITE_CODE is still the public demo code. Leave it empty and use `npm run authority:invite` instead.');
+    problems.push(
+      'AUTHORITY_INVITE_CODE is still the public demo code. Leave it empty and use `npm run authority:invite` instead.',
+    );
   if (/\/\/postgres:postgres@/.test(env.databaseUrl))
     problems.push('DATABASE_URL still uses the default postgres:postgres login. Create a strong database password.');
-  if (!env.smtp.host)
-    problems.push('SMTP_HOST is empty, so password-reset emails cannot be sent.');
+  if (!env.resend.apiKey) problems.push('RESEND_API_KEY is missing, so emails cannot be sent.');
   if (env.corsOrigin.split(',').some((o) => o.trim() === '*'))
     problems.push('CORS_ORIGIN must list your real site address(es), not *.');
-  for (const [name, value] of [['APP_URL', env.appUrl], ['API_URL', env.apiUrl]])
+  for (const [name, value] of [
+    ['APP_URL', env.appUrl],
+    ['API_URL', env.apiUrl],
+  ])
     if (!/^https:\/\//i.test(value) && !isLocalAddress(value))
       problems.push(`${name} must start with https:// (the links in emails carry one-time tokens).`);
   if (problems.length) throw new Error(`Unsafe production configuration:\n - ${problems.join('\n - ')}`);

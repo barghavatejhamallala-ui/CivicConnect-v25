@@ -1,23 +1,40 @@
-// Usage:  npm run mail:test            -> checks the SMTP login only
-//         npm run mail:test you@x.com  -> also sends a real test email to that address
-import { env } from '../config/env.js';
+// Usage: npm run mail:test
+//        npm run mail:test your-email@example.com
+
 import { mailConfigured, verifyMail, sendMail, fromAddress, passwordResetEmail } from './mailer.js';
+import { env } from '../config/env.js';
 
 const to = process.argv[2];
-console.log(`SMTP host: ${env.smtp.host || '(not set)'}  port: ${env.smtp.port}  secure: ${env.smtp.secure}  user: ${env.smtp.user || '(none)'}  from: ${fromAddress()}`);
+
+console.log(`Email provider: Resend`);
+console.log(`From: ${fromAddress()}`);
+
 if (!mailConfigured()) {
-  console.log('\nSMTP is NOT configured: set SMTP_HOST / SMTP_USER / SMTP_PASS in Backend/.env (see .env.example). Until then, reset links are only printed in the API terminal.');
+  console.error('\nRESEND_API_KEY is not configured.');
   process.exit(1);
 }
+
 const v = await verifyMail();
-console.log(v.ok ? '\n✔ Connected and logged in to the SMTP server.' : `\n✘ Could not use the SMTP server: ${v.reason}`);
-if (!v.ok)
+
+if (!v.ok) {
+  console.error(`\nResend configuration error: ${v.reason}`);
   process.exit(1);
+}
+
+console.log('\nResend API key is configured.');
+
 if (to) {
-  // Sends the real password-reset design (with a harmless sample link), so you see exactly what users will get.
   const r = await sendMail({
-    to, ...passwordResetEmail({ name: 'there', portal: 'Citizen', link: `${env.appUrl}/citizen/?reset=sample-link-not-valid`, minutes: env.resetTokenMinutes })
+    to,
+    ...passwordResetEmail({
+      name: 'there',
+      portal: 'Citizen',
+      link: `${env.appUrl}/citizen/?reset=sample-link-not-valid`,
+      minutes: env.resetTokenMinutes,
+    }),
   });
-  console.log(r.sent ? `✔ Test email sent to ${to}. Check the inbox (and spam folder).` : `✘ Sending failed: ${r.error}`);
+
+  console.log(r.sent ? `✔ Test email sent to ${to}. Check your inbox.` : `✘ Sending failed: ${r.error}`);
+
   process.exit(r.sent ? 0 : 1);
 }
